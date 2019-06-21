@@ -1,0 +1,165 @@
+import datetime
+import time
+from selenium import webdriver
+from selenium.webdriver.support.ui import Select
+import string
+from random import randint, choice
+import random
+from selenium.webdriver.common.keys import Keys
+import json
+import gspread
+from oauth2client.service_account import ServiceAccountCredentials
+import pandas as pd
+from bs4 import BeautifulSoup
+
+scope = ['https://spreadsheets.google.com/feeds',
+         'https://www.googleapis.com/auth/drive']
+
+creds = ServiceAccountCredentials.from_json_keyfile_name('IMM5707-6e0d28cf3bae.json', scope)
+client = gspread.authorize(creds)
+sheet = client.open("Artigo_LATAM").sheet1
+
+# Abrir navegador
+driver = webdriver.Chrome("C:/Users/Anderson/PycharmProjects/seleniumTeste/drivers/chromedriver.exe")
+url = "https://m.voegol.com.br/pt/Buscar/"
+driver.get(url)
+driver.implicitly_wait(10)
+time.sleep(3)
+
+def periodo_da_pesquisa():
+    # Data
+    data = datetime.date.today().strftime('%d-%m-%Y')
+    hora_min_sec = datetime.datetime.now().strftime("%H:%M:%S")
+    hora = datetime.datetime.now().strftime("%H")
+    hora_int = int(hora)
+
+    # classificacao do dia
+    periodo = ['Manhã', 'Tarde', 'Noite', 'Madrugada']
+    periodo_pes = ""
+
+    if 00 <= hora_int <= 5:
+        periodo_pes = periodo[3]
+    elif 6 <= hora_int <= 11:
+        periodo_pes = periodo[0]
+    elif 12 <= hora_int <= 17:
+        periodo_pes = periodo[1]
+    elif 18 <= hora_int <= 23:
+        periodo_pes = periodo[2]
+
+    return [data, hora_min_sec, periodo_pes]
+
+# Origem e Destino
+javaScript_origem = 'document.getElementsByClassName("origin inputText")[0].innerHTML="GRU";'
+javaScript_destino = 'document.getElementsByClassName("arrival inputText")[0].innerHTML="REC";'
+driver.execute_script(javaScript_origem)
+driver.execute_script(javaScript_destino)
+
+# Datas
+data_partida = 'document.getElementsByClassName("date-departure inputText")[0].innerHTML="02/07/2019";'
+data_retorno = 'document.getElementsByClassName("inputText")[3].innerHTML="08/07/2019";'
+driver.execute_script(data_partida)
+driver.execute_script(data_retorno)
+# Busca
+driver.find_element_by_xpath('//*[@id="form-purchase-submit"]').click()
+
+# Beautiful Soup
+html_soup = BeautifulSoup(driver.page_source, 'html.parser')
+# Container de todos voos
+voos_containers = html_soup.find_all('div', class_='result-box result-box-title widget-box dadosVoo')
+
+dicionario = {}
+records_voos = []
+records_precos = []
+
+# Funcion para limpar o preco
+def tratamento(x):
+    return x.replace("R$", "").replace(" - Light", "").strip()
+
+
+for voo_container in voos_containers:
+    voo = voo_container.find("span", class_="flight-cia").text
+    records_voos.append(voo)
+
+    precos = voo_container.find('div', class_='result-box-fare-types').find("div", class_="boxTarifas light").text
+    records_precos.append(tratamento(precos))
+
+    dicionario.update({voo: tratamento(precos)})
+
+
+voos = ["GOL  G3 1614 (GRU)", "GOL  G3 1616 (GRU)",
+        "GOL  G3 1618 (GRU)", "GOL  G3 1620 (GRU)",
+        "GOL  G3 9039 (GRU)", "GOL  G3 9123 (GRU)"]
+
+voos_diretos = []
+precos_voos_diretos = []
+
+for x in voos:
+    if x in dicionario:
+        for key, value in dicionario.items():
+            if len(voos) != len(voos_diretos):
+                voos_diretos.append(key)
+                precos_voos_diretos.append(value)
+
+indice_voo = 2
+periodo = periodo_da_pesquisa()
+
+for x in voos_diretos:
+    if x == "GOL  G3 1614 (GRU)":
+        indice_x = voos_diretos.index(x)
+        voo_1614 = [str(periodo[0]), str(periodo[1]), str(periodo[2]),
+                    "GOL", "G3-1614", "Manhã", "07:40", "10:45", "3", precos_voos_diretos[indice_x]]
+        sheet.insert_row(voo_1614, indice_voo)
+        print(voo_1614)
+
+    elif x == "GOL  G3 1616 (GRU)":
+        indice_x = voos_diretos.index(x)
+        voo_1616 = [str(periodo[0]), str(periodo[1]), str(periodo[2]),
+                    "GOL", "G3-1616", "Manhã", "09:50", "12:50", "3", precos_voos_diretos[indice_x]]
+        sheet.insert_row(voo_1616, indice_voo)
+        print(voo_1616)
+
+    elif x == "GOL  G3 1618 (GRU)":
+        indice_x = voos_diretos.index(x)
+        voo_1618 = [str(periodo[0]), str(periodo[1]), str(periodo[2]),
+                    "GOL", "G3-1618", "Tarde", "14:30", "17:35", "3", precos_voos_diretos[indice_x]]
+        sheet.insert_row(voo_1618, indice_voo)
+        print(voo_1618)
+
+    elif x == "GOL  G3 1620 (GRU)":
+        indice_x = voos_diretos.index(x)
+        voo_1620 = [str(periodo[0]), str(periodo[1]), str(periodo[2]),
+                    "GOL", "G3-1620", "Noite", "21:10", "00:15", "3", precos_voos_diretos[indice_x]]
+        sheet.insert_row(voo_1620, indice_voo)
+        print(voo_1620)
+
+    elif x == "GOL  G3 9039 (GRU)":
+        indice_x = voos_diretos.index(x)
+        voo_9039 = [str(periodo[0]), str(periodo[1]), str(periodo[2]),
+                    "GOL", "G3-9039", "Madrugada", "03:05", "06:05", "3", precos_voos_diretos[indice_x]]
+        sheet.insert_row(voo_9039, indice_voo)
+        print(voo_9039)
+
+    elif x == "GOL  G3 9123 (GRU)":
+        indice_x = voos_diretos.index(x)
+        voo_9123 = [str(periodo[0]), str(periodo[1]), str(periodo[2]),
+                    "GOL", "G3-9123", "Madrugada", "03:05", "06:05", "3", precos_voos_diretos[indice_x]]
+        sheet.insert_row(voo_9123, indice_voo)
+        print(voo_9123)
+
+    else:
+        indice_x = voos_diretos.index(x)
+        not_available = [str(periodo[0]), str(periodo[1]), str(periodo[2]),
+                         "GOL", x, "NA", "NA", "NA", "NA", "NA"]
+        sheet.insert_row(not_available, indice_voo)
+        print(not_available)
+
+linha_em_branco = ["", "", "", "", "", "", "", ""]
+sheet.insert_row(linha_em_branco, indice_voo)
+
+
+print(voos_diretos)
+print(precos_voos_diretos)
+
+teste_df = pd.DataFrame({"voo": voos_diretos, "preco": precos_voos_diretos})
+
+print(teste_df)
